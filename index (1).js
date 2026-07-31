@@ -717,7 +717,7 @@ client.on(
                 { name: "Account", value: `${data.account || 'Not provided'}`, inline: false },
                 { name: "Notes", value: "No notes provided.", inline: false }
               )
-              .setFooter({ text: "Developer – Yi Chan" })
+              .setFooter({ text: "Developer – MHGAMING" })
               .setTimestamp();
 
             await logChannel.send({ embeds: [logEmbed] }).catch(() => {});
@@ -730,7 +730,9 @@ client.on(
       }
       
       
+            // ====================================
       // FAIL MODAL SUBMIT
+      // ====================================
       if (interaction.isModalSubmit() && interaction.customId.startsWith("fail_modal_")) {
         if (!isTester(interaction)) {
           return interaction.editReply({
@@ -753,13 +755,18 @@ client.on(
           return interaction.editReply({ content: "❌ Player gamemode not found." });
         }
 
-        queues[mode] = queues[mode].filteer(id => id !== userId);
+        // Save rank before updating
+        const rankBefore = data.tier || "None";
+
+        // Remove from queue & update stats
+        queues[mode] = queues[mode].filter(id => id !== userId);
         data.losses = (data.losses || 0) + 1;
         db[`user_${userId}`] = data;
         saveDB(db);
 
         await updateQueue(mode);
 
+        // DM Player
         const user = await client.users.fetch(userId).catch(() => null);
         if (user) {
           await user.send({
@@ -774,19 +781,27 @@ client.on(
           }).catch(() => {});
         }
 
+        // LOG CHANNEL EMBED (Image 1 Format - Fail Version)
         if (config.logChannel) {
           const logChannel = client.channels.cache.get(config.logChannel);
           if (logChannel) {
-            await logChannel.send({
-              embeds: [
-                new EmbedBuilder()
-                  .setColor("#E74C3C")
-                  .setTitle("❌ Player Failed")
-                  .setDescription(
-                    `👤 **Player:** <@${userId}>\n🎮 **Gamemode:** ${mode.toUpperCase()}\n📝 **Reason:** ${reason}\n🧪 **Tester:** <@${interaction.user.id}>`
-                  )
-              ]
-            }).catch(() => {});
+            const failLogEmbed = new EmbedBuilder()
+              .setColor("#E74C3C") // Red Border
+              .setTitle(`❌ ${data.ign || 'Player'}'s Test Results`)
+              .addFields(
+                { name: "Player Name", value: `<@${userId}>`, inline: false },
+                { name: "Tester Name", value: `<@${interaction.user.id}>`, inline: false },
+                { name: "Rank Before", value: `${rankBefore}`, inline: false },
+                { name: "Rank Earned", value: "FAILED", inline: false },
+                { name: "Game Mode", value: `${mode.toUpperCase()}`, inline: false },
+                { name: "Region", value: `${data.region || 'Not provided'}`, inline: false },
+                { name: "Account", value: `${data.account || 'Not provided'}`, inline: false },
+                { name: "Notes", value: `${reason}`, inline: false }
+              )
+              .setFooter({ text: "Developer – Yi Chan" })
+              .setTimestamp();
+
+            await logChannel.send({ embeds: [failLogEmbed] }).catch(() => {});
           }
         }
 
@@ -794,34 +809,7 @@ client.on(
           content: `❌ **${data.ign}** has been marked as **FAIL**.\n\n📝 Reason: **${reason}**`
         });
       }
-
-    } catch (error) {
-
-      console.error(
-        "Interaction Error:",
-        error
-      );
-
-      if (
-        !interaction.replied &&
-        !interaction.deferred
-      ) {
-
-        await interaction.reply({
-          content: "❌ Something went wrong. Check the bot console.",
-          ephemeral: true
-        }).catch(() => {});
-
-      } else {
-        await interaction.editReply({
-          content: "❌ Something went wrong while processing your request."
-        }).catch(() => {});
-      }
-
-    }
-
-  }
-);
+      
 
 // ========================================
 // AUTO QUEUE REFRESH
