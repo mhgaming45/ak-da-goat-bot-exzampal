@@ -1,13 +1,13 @@
 {
   "name": "ak-da-goat-bot",
-  "version": "1.0.0",
-  "description": "Discord Panel Bot",
+  "version": "2.0.0",
+  "description": "AK Tire Testing Discord Bot",
   "main": "index.js",
   "scripts": {
     "start": "node deploy-commands.js && node index.js"
   },
   "dependencies": {
     "discord.js": "^14.21.0",
-    "dotenv": "^16.6.1",
+    "dotenv": "^16.6.1"
   }
 }
