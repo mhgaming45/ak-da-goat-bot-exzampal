@@ -49,7 +49,7 @@ function saveDB(data) {
 }
 
 // ========================================
-// QUEUES
+// QUEUES (Multi-Queue Supported)
 // ========================================
 
 const queues = {
@@ -93,15 +93,12 @@ const commandsPath = path.join(
 );
 
 if (fs.existsSync(commandsPath)) {
-
   const commandFiles = fs
     .readdirSync(commandsPath)
     .filter(file => file.endsWith(".js"));
 
   for (const file of commandFiles) {
-
     try {
-
       const command = require(
         path.join(commandsPath, file)
       );
@@ -110,7 +107,6 @@ if (fs.existsSync(commandsPath)) {
         command.data &&
         command.execute
       ) {
-
         client.commands.set(
           command.data.name,
           command
@@ -119,20 +115,14 @@ if (fs.existsSync(commandsPath)) {
         console.log(
           `Loaded Command: ${command.data.name}`
         );
-
       }
-
     } catch (err) {
-
       console.error(
         `Error loading ${file}:`,
         err
       );
-
     }
-
   }
-
 }
 
 // ========================================
@@ -142,23 +132,18 @@ if (fs.existsSync(commandsPath)) {
 client.once(
   Events.ClientReady,
   () => {
-
     console.log(
       "=============================="
     );
-
     console.log(
       `${client.user.tag} is online!`
     );
-
     console.log(
       "AK Tier Testing Bot Ready"
     );
-
     console.log(
       "=============================="
     );
-
   }
 );
 
@@ -167,7 +152,6 @@ client.once(
 // ========================================
 
 async function updateQueue(mode) {
-
   if (!queues[mode]) return;
 
   const channelId =
@@ -202,7 +186,6 @@ async function updateQueue(mode) {
     });
 
   try {
-
     const messages =
       await channel.messages.fetch({
         limit: 50
@@ -217,28 +200,20 @@ async function updateQueue(mode) {
       );
 
     if (botMessage) {
-
       await botMessage.edit({
         embeds: [embed]
       });
-
     } else {
-
       await channel.send({
         embeds: [embed]
       });
-
     }
-
   } catch (err) {
-
     console.error(
       `Queue update error (${mode}):`,
       err
     );
-
   }
-
 }
 
 // ========================================
@@ -246,15 +221,11 @@ async function updateQueue(mode) {
 // ========================================
 
 async function updateAllQueues() {
-
   for (
     const mode of Object.keys(queues)
   ) {
-
     await updateQueue(mode);
-
   }
-
 }
 
 // ========================================
@@ -262,11 +233,9 @@ async function updateAllQueues() {
 // ========================================
 
 function isTester(interaction) {
-
   return interaction.member?.permissions?.has(
     PermissionsBitField.Flags.ManageGuild
   );
-
 }
 
 // ========================================
@@ -276,9 +245,7 @@ function isTester(interaction) {
 client.on(
   Events.InteractionCreate,
   async interaction => {
-
     try {
-
       // ====================================
       // SLASH COMMANDS
       // ====================================
@@ -286,7 +253,6 @@ client.on(
       if (
         interaction.isChatInputCommand()
       ) {
-
         const command =
           client.commands.get(
             interaction.commandName
@@ -309,6 +275,14 @@ client.on(
         interaction.isButton() &&
         interaction.customId === "register"
       ) {
+        const db = loadDB();
+        if (db[`user_${interaction.user.id}`]) {
+          return interaction.reply({
+            content: "✅ **You are already registered!** There is no need to register again. You can click any gamemode button to join a queue directly.",
+            ephemeral: true
+          });
+        }
+
         const modal = new ModalBuilder()
           .setCustomId("register_modal")
           .setTitle("Player Registration");
@@ -423,7 +397,6 @@ client.on(
           ign: interaction.fields.getTextInputValue("ign"),
           region: interaction.fields.getTextInputValue("region"),
           account: interaction.fields.getTextInputValue("account"),
-          gamemode: oldData.gamemode || null,
           tier: oldData.tier || null,
           wins: oldData.wins || 0,
           losses: oldData.losses || 0
@@ -435,28 +408,12 @@ client.on(
           await interaction.member.roles.add(config.queueRole).catch(() => {});
         }
 
-        const row1 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId("uhc").setLabel("UHC").setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId("pot").setLabel("Diamond Pot").setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId("mace").setLabel("Mace").setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId("nethop").setLabel("Netherite Pot").setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId("smp").setLabel("SMP").setStyle(ButtonStyle.Secondary)
-        );
-
-        const row2 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId("sword").setLabel("Sword").setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId("axe").setLabel("Axe").setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId("vanilla").setLabel("Vanilla").setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId("cart").setLabel("Cart").setStyle(ButtonStyle.Secondary)
-        );
-
         return interaction.editReply({
-          content: "✅ **Registration Complete!**\n\n🎮 Select your gamemode:",
-          components: [row1, row2]
+          content: "✅ **Registration Successful!**\nYou are now permanently registered. You can click on any gamemode button to join a queue."
         });
       }
 
-      // GAMEMODE BUTTONS
+      // GAMEMODE BUTTONS (Direct Access & Multi Queue Supported)
       const gamemodes = ["uhc", "pot", "mace", "nethop", "smp", "sword", "axe", "vanilla", "cart"];
       if (interaction.isButton() && gamemodes.includes(interaction.customId)) {
         const mode = interaction.customId;
@@ -465,48 +422,33 @@ client.on(
 
         if (!data) {
           return interaction.editReply({
-            content: "❌ Please register first using the Register button."
+            content: "❌ **You are not registered yet!**\nPlease click the **Register** button first to submit your details."
           });
         }
 
-        let currentMode = null;
-        for (const queueMode of Object.keys(queues)) {
-          if (queues[queueMode].includes(interaction.user.id)) {
-            currentMode = queueMode;
-            break;
-          }
-        }
-
-        if (currentMode) {
-          const position = queues[currentMode].indexOf(interaction.user.id) + 1;
+        // Check if already in this specific queue
+        if (queues[mode].includes(interaction.user.id)) {
+          const position = queues[mode].indexOf(interaction.user.id) + 1;
           return interaction.editReply({
-            content: `❌ You are already in the **${currentMode.toUpperCase()}** queue.\n\n📍 Position: **#${position}**\n\nUse **Leave Queue** first if you want to change gamemode.`
+            content: `❌ You are already in the **${mode.toUpperCase()}** Queue.\n📍 Position: **#${position}**`
           });
         }
 
-        data.gamemode = mode;
-        db[`user_${interaction.user.id}`] = data;
-        saveDB(db);
-
+        // Add user to this queue
         queues[mode].push(interaction.user.id);
         const position = queues[mode].length;
 
-        if (config.roles) {
-          for (const roleId of Object.values(config.roles)) {
-            await interaction.member.roles.remove(roleId).catch(() => {});
-          }
-          if (config.roles[mode]) {
-            await interaction.member.roles.add(config.roles[mode]).catch(() => {});
-          }
+        if (config.roles && config.roles[mode]) {
+          await interaction.member.roles.add(config.roles[mode]).catch(() => {});
         }
 
         await interaction.editReply({
           embeds: [
             new EmbedBuilder()
               .setColor("#2ECC71")
-              .setTitle("✅ Joined Queue")
+              .setTitle("✅ Queue Joined")
               .setDescription(
-                `🎮 **Gamemode:** ${mode.toUpperCase()}\n\n📍 **Position:** #${position}\n👥 **Players Ahead:** ${position - 1}\n\nPlease wait for a tester.`
+                `🎮 **Gamemode:** ${mode.toUpperCase()}\n📍 **Position:** #${position}\n👥 **Players Ahead:** ${position - 1}\n\nPlease wait for a tester!`
               )
           ]
         });
@@ -515,49 +457,30 @@ client.on(
         return;
       }
 
-      // JOIN QUEUE BUTTON
-      if (interaction.isButton() && interaction.customId === "join_queue") {
-        return interaction.editReply({
-          content: "🎮 Select your gamemode from the **Register Panel** to join a queue."
-        });
-      }
-
-      // LEAVE QUEUE
+      // LEAVE QUEUE BUTTON
       if (interaction.isButton() && interaction.customId === "leave_queue") {
-        let foundMode = null;
+        let leftModes = [];
+
         for (const mode of Object.keys(queues)) {
           if (queues[mode].includes(interaction.user.id)) {
-            foundMode = mode;
-            break;
+            queues[mode] = queues[mode].filter(id => id !== interaction.user.id);
+            leftModes.push(mode.toUpperCase());
+            if (config.roles && config.roles[mode]) {
+              await interaction.member.roles.remove(config.roles[mode]).catch(() => {});
+            }
+            await updateQueue(mode);
           }
         }
 
-        if (!foundMode) {
+        if (leftModes.length === 0) {
           return interaction.editReply({
-            content: "❌ You are not currently in a queue."
+            content: "❌ You are not in any queue."
           });
         }
 
-        queues[foundMode] = queues[foundMode].filter(id => id !== interaction.user.id);
-
-        if (config.roles) {
-          for (const roleId of Object.values(config.roles)) {
-            await interaction.member.roles.remove(roleId).catch(() => {});
-          }
-        }
-
-        const db = loadDB();
-        if (db[`user_${interaction.user.id}`]) {
-          db[`user_${interaction.user.id}`].gamemode = null;
-          saveDB(db);
-        }
-
-        await interaction.editReply({
-          content: `✅ You left the **${foundMode.toUpperCase()}** queue.`
+        return interaction.editReply({
+          content: `✅ You have left the following queues: **${leftModes.join(", ")}**`
         });
-
-        await updateQueue(foundMode);
-        return;
       }
 
       // TESTER GAMEMODE SELECT
@@ -627,9 +550,7 @@ client.on(
         });
       }
 
-            // ====================================
-      // TIER MODAL SUBMIT
-      // ====================================
+      // TIER MODAL SUBMIT (PASS)
       if (interaction.isModalSubmit() && interaction.customId.startsWith("tier_modal_")) {
         if (!isTester(interaction)) {
           return interaction.editReply({
@@ -653,39 +574,32 @@ client.on(
           return interaction.editReply({ content: "❌ Player data not found." });
         }
 
-        const mode = data.gamemode;
-        if (!mode || !queues[mode]) {
-          return interaction.editReply({ content: "❌ Player gamemode not found." });
-        }
-
-        const member = await interaction.guild.members.fetch(userId).catch(() => null);
-        if (!member) {
-          return interaction.editReply({ content: "❌ Player is no longer in the server." });
-        }
-
-        // Save old rank before updating
+        const mode = testerMode[interaction.user.id];
         const rankBefore = data.tier || "None";
 
-        // Remove old tier roles
         if (config.tierRoles) {
           for (const roleId of Object.values(config.tierRoles)) {
-            await member.roles.remove(roleId).catch(() => {});
+            const member = await interaction.guild.members.fetch(userId).catch(() => null);
+            if (member) await member.roles.remove(roleId).catch(() => {});
           }
         }
 
-        // Add new tier role
-        await member.roles.add(config.tierRoles[rankEarned]).catch(() => {});
-        queues[mode] = queues[mode].filter(id => id !== userId);
+        const member = await interaction.guild.members.fetch(userId).catch(() => null);
+        if (member && config.tierRoles[rankEarned]) {
+          await member.roles.add(config.tierRoles[rankEarned]).catch(() => {});
+        }
 
-        // Update database
+        // Remove from this specific mode queue
+        if (mode && queues[mode]) {
+          queues[mode] = queues[mode].filter(id => id !== userId);
+          await updateQueue(mode);
+        }
+
         data.tier = rankEarned;
         data.wins = (data.wins || 0) + 1;
         db[`user_${userId}`] = data;
         saveDB(db);
 
-        await updateQueue(mode);
-
-        // DM Player
         const user = await client.users.fetch(userId).catch(() => null);
         if (user) {
           await user.send({
@@ -694,13 +608,12 @@ client.on(
                 .setColor("#2ECC71")
                 .setTitle("🎉 Test Passed!")
                 .setDescription(
-                  `Congratulations!\n\n🏆 **Tier:** ${rankEarned}\n🎮 **Gamemode:** ${mode.toUpperCase()}\n\nYour tier has been assigned.`
+                  `Congratulations!\n\n🏆 **Tier:** ${rankEarned}\n🎮 **Gamemode:** ${mode ? mode.toUpperCase() : 'UNKNOWN'}\n\nYour tier has been assigned.`
                 )
             ]
           }).catch(() => {});
         }
 
-        // LOG CHANNEL EMBED (Image 1 Format)
         if (config.logChannel) {
           const logChannel = client.channels.cache.get(config.logChannel);
           if (logChannel) {
@@ -712,7 +625,7 @@ client.on(
                 { name: "Tester Name", value: `<@${interaction.user.id}>`, inline: false },
                 { name: "Rank Before", value: `${rankBefore}`, inline: false },
                 { name: "Rank Earned", value: `${rankEarned}`, inline: false },
-                { name: "Game Mode", value: `${mode.toUpperCase()}`, inline: false },
+                { name: "Game Mode", value: `${mode ? mode.toUpperCase() : 'N/A'}`, inline: false },
                 { name: "Region", value: `${data.region || 'Not provided'}`, inline: false },
                 { name: "Account", value: `${data.account || 'Not provided'}`, inline: false },
                 { name: "Notes", value: "No notes provided.", inline: false }
@@ -728,11 +641,8 @@ client.on(
           content: `✅ **${data.ign}** passed!\n\n🏆 Tier Assigned: **${rankEarned}**`
         });
       }
-      
-      
-            // ====================================
+
       // FAIL MODAL SUBMIT
-      // ====================================
       if (interaction.isModalSubmit() && interaction.customId.startsWith("fail_modal_")) {
         if (!isTester(interaction)) {
           return interaction.editReply({
@@ -750,23 +660,18 @@ client.on(
           return interaction.editReply({ content: "❌ Player data not found." });
         }
 
-        const mode = data.gamemode;
-        if (!mode || !queues[mode]) {
-          return interaction.editReply({ content: "❌ Player gamemode not found." });
-        }
-
-        // Save rank before updating
+        const mode = testerMode[interaction.user.id];
         const rankBefore = data.tier || "None";
 
-        // Remove from queue & update stats
-        queues[mode] = queues[mode].filter(id => id !== userId);
+        if (mode && queues[mode]) {
+          queues[mode] = queues[mode].filter(id => id !== userId);
+          await updateQueue(mode);
+        }
+
         data.losses = (data.losses || 0) + 1;
         db[`user_${userId}`] = data;
         saveDB(db);
 
-        await updateQueue(mode);
-
-        // DM Player
         const user = await client.users.fetch(userId).catch(() => null);
         if (user) {
           await user.send({
@@ -775,30 +680,29 @@ client.on(
                 .setColor("#E74C3C")
                 .setTitle("❌ Test Failed")
                 .setDescription(
-                  `Unfortunately, you did not pass this test.\n\n🎮 **Gamemode:** ${mode.toUpperCase()}\n📝 **Reason:** ${reason}`
+                  `Unfortunately, you did not pass this test.\n\n🎮 **Gamemode:** ${mode ? mode.toUpperCase() : 'UNKNOWN'}\n📝 **Reason:** ${reason}`
                 )
             ]
           }).catch(() => {});
         }
 
-        // LOG CHANNEL EMBED (Image 1 Format - Fail Version)
         if (config.logChannel) {
           const logChannel = client.channels.cache.get(config.logChannel);
           if (logChannel) {
             const failLogEmbed = new EmbedBuilder()
-              .setColor("#E74C3C") // Red Border
+              .setColor("#E74C3C")
               .setTitle(`❌ ${data.ign || 'Player'}'s Test Results`)
               .addFields(
                 { name: "Player Name", value: `<@${userId}>`, inline: false },
                 { name: "Tester Name", value: `<@${interaction.user.id}>`, inline: false },
                 { name: "Rank Before", value: `${rankBefore}`, inline: false },
                 { name: "Rank Earned", value: "FAILED", inline: false },
-                { name: "Game Mode", value: `${mode.toUpperCase()}`, inline: false },
+                { name: "Game Mode", value: `${mode ? mode.toUpperCase() : 'N/A'}`, inline: false },
                 { name: "Region", value: `${data.region || 'Not provided'}`, inline: false },
                 { name: "Account", value: `${data.account || 'Not provided'}`, inline: false },
                 { name: "Notes", value: `${reason}`, inline: false }
               )
-              .setFooter({ text: "Developer – Yi Chan" })
+              .setFooter({ text: "Developer – MHGAMING" })
               .setTimestamp();
 
             await logChannel.send({ embeds: [failLogEmbed] }).catch(() => {});
@@ -809,7 +713,29 @@ client.on(
           content: `❌ **${data.ign}** has been marked as **FAIL**.\n\n📝 Reason: **${reason}**`
         });
       }
-      
+
+    } catch (error) {
+      console.error(
+        "Interaction Error:",
+        error
+      );
+
+      if (
+        !interaction.replied &&
+        !interaction.deferred
+      ) {
+        await interaction.reply({
+          content: "❌ Something went wrong. Check the bot console.",
+          ephemeral: true
+        }).catch(() => {});
+      } else {
+        await interaction.editReply({
+          content: "❌ Something went wrong while processing your request."
+        }).catch(() => {});
+      }
+    }
+  }
+);
 
 // ========================================
 // AUTO QUEUE REFRESH
@@ -817,20 +743,14 @@ client.on(
 
 setInterval(
   async () => {
-
     try {
-
       await updateAllQueues();
-
     } catch (error) {
-
       console.error(
         "Queue refresh error:",
         error
       );
-
     }
-
   },
   30000
 );
@@ -842,7 +762,6 @@ setInterval(
 http
   .createServer(
     (req, res) => {
-
       res.writeHead(
         200,
         {
@@ -854,17 +773,14 @@ http
       res.end(
         "AK Tier Testing Bot is running!"
       );
-
     }
   )
   .listen(
     process.env.PORT || 3000,
     () => {
-
       console.log(
         "Web server started."
       );
-
     }
   );
 
