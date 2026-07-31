@@ -83,7 +83,6 @@ if (fs.existsSync(commandsPath)) {
       const command = require(path.join(commandsPath, file));
       if (command.data && command.execute) {
         client.commands.set(command.data.name, command);
-        console.log(`Loaded Command: ${command.data.name}`);
       }
     } catch (err) {
       console.error(`Error loading ${file}:`, err);
@@ -93,12 +92,12 @@ if (fs.existsSync(commandsPath)) {
 
 client.once(Events.ClientReady, () => {
   console.log("==============================");
-  console.log(`${client.user.tag} is online!`);
+  console.log(`${client.user.tag} is online and fast!`);
   console.log("==============================");
 });
 
 // ========================================
-// UPDATE QUEUE CHANNEL EMBEDS
+// UPDATE QUEUE CHANNEL EMBEDS (BACKGROUND)
 // ========================================
 
 async function updateQueue(mode) {
@@ -119,11 +118,9 @@ async function updateQueue(mode) {
   const embed = new EmbedBuilder()
     .setColor(isClosed ? "#E74C3C" : "#2ECC71")
     .setTitle(`🎮 ${mode.toUpperCase()} Queue is ${isClosed ? "Closed" : "Open"}`)
-    .setDescription(
-      `**Queue List:**\n` + (list || "No one in queue yet")
-    )
+    .setDescription(`**Current Waitlist:**\n` + (list || "No active queue"))
     .setFooter({
-      text: `Developer - MHGAMING | Today at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+      text: `Developer - MHGAMING`
     });
 
   const row = new ActionRowBuilder().addComponents(
@@ -132,7 +129,7 @@ async function updateQueue(mode) {
   );
 
   try {
-    const messages = await channel.messages.fetch({ limit: 20 });
+    const messages = await channel.messages.fetch({ limit: 10 });
     const botMessage = messages.find(
       msg => msg.author.id === client.user.id && msg.embeds.length > 0
     );
@@ -147,23 +144,17 @@ async function updateQueue(mode) {
   }
 }
 
-async function updateAllQueues() {
-  for (const mode of Object.keys(queues)) {
-    await updateQueue(mode);
-  }
-}
-
 function isTester(interaction) {
   return interaction.member?.permissions?.has(PermissionsBitField.Flags.ManageGuild);
 }
 
 // ========================================
-// INTERACTION HANDLER
+// FAST INTERACTION HANDLER
 // ========================================
 
 client.on(Events.InteractionCreate, async interaction => {
   try {
-    // Slash Commands
+    // 1. Slash Commands
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
@@ -171,7 +162,7 @@ client.on(Events.InteractionCreate, async interaction => {
       return;
     }
 
-    // Modal Trigger Buttons
+    // 2. Instant Modal Trigger Buttons (Zero Delay)
     if (interaction.isButton() && interaction.customId === "register") {
       const modal = new ModalBuilder()
         .setCustomId("register_modal")
@@ -249,10 +240,7 @@ client.on(Events.InteractionCreate, async interaction => {
       return interaction.showModal(modal);
     }
 
-    // Standard Buttons / Modal Submit
-    await interaction.deferReply({ ephemeral: true }).catch(() => {});
-
-    // Save Registration Modal Submit
+    // 3. Fast Registration Modal Submit
     if (interaction.isModalSubmit() && interaction.customId === "register_modal") {
       const db = loadDB();
       const ign = interaction.fields.getTextInputValue("ign");
@@ -281,10 +269,10 @@ client.on(Events.InteractionCreate, async interaction => {
         )
         .setFooter({ text: "Tier Testing System" });
 
-      return interaction.editReply({ embeds: [embed] });
+      return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
-    // Gamemode Selection Buttons (From main panel or channel)
+    // 4. Fast Instant Gamemode Queue Buttons (Instant Direct Reply)
     const gamemodes = ["uhc", "pot", "mace", "nethop", "smp", "sword", "axe", "vanilla", "cart", "diasmp"];
     let selectedMode = null;
     let action = "join";
@@ -305,8 +293,9 @@ client.on(Events.InteractionCreate, async interaction => {
       const data = db[`user_${interaction.user.id}`];
 
       if (!data) {
-        return interaction.editReply({
-          content: "❌ You must click **Register/Update** first before joining a queue!"
+        return interaction.reply({
+          content: "❌ You must click **Register/Update** first before joining a queue!",
+          ephemeral: true
         });
       }
 
@@ -329,22 +318,30 @@ client.on(Events.InteractionCreate, async interaction => {
             { name: "🎮 Gamemode", value: selectedMode.toUpperCase(), inline: false },
             { name: "📌 Queue Channel", value: channelMention, inline: false }
           )
-          .setFooter({ text: `Tier Testing Queue System | Today at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` });
+          .setFooter({ text: "Tier Testing Queue System" });
 
-        await updateQueue(selectedMode);
-        return interaction.editReply({ embeds: [queueEmbed] });
+        // Instantly reply to user so there is ZERO delay or thinking state!
+        await interaction.reply({ embeds: [queueEmbed], ephemeral: true });
+
+        // Update channel embed in background
+        updateQueue(selectedMode).catch(() => {});
+        return;
       }
 
       if (action === "leave") {
         queues[selectedMode] = queues[selectedMode].filter(id => id !== interaction.user.id);
-        await updateQueue(selectedMode);
-        return interaction.editReply({
-          content: `✅ You have left the **${selectedMode.toUpperCase()}** queue.`
+        
+        await interaction.reply({
+          content: `✅ You have left the **${selectedMode.toUpperCase()}** queue.`,
+          ephemeral: true
         });
+
+        updateQueue(selectedMode).catch(() => {});
+        return;
       }
     }
 
-    // Tester Assign Pass/Fail Submits
+    // 5. Tier Assign Result Submits
     if (interaction.isModalSubmit() && interaction.customId.startsWith("tier_modal_")) {
       const userId = interaction.customId.replace("tier_modal_", "");
       const rankEarned = interaction.fields.getTextInputValue("tier").trim().toUpperCase();
@@ -359,7 +356,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
       if (mode && queues[mode]) {
         queues[mode] = queues[mode].filter(id => id !== userId);
-        await updateQueue(mode);
+        updateQueue(mode).catch(() => {});
       }
 
       if (config.logChannel) {
@@ -381,18 +378,13 @@ client.on(Events.InteractionCreate, async interaction => {
         }
       }
 
-      return interaction.editReply({ content: `✅ Assigned **${rankEarned}** to <@${userId}>.` });
+      return interaction.reply({ content: `✅ Assigned **${rankEarned}** to <@${userId}>.`, ephemeral: true });
     }
 
   } catch (err) {
     console.error("Interaction error:", err);
   }
 });
-
-// Periodic Queue Auto Refresh
-setInterval(() => {
-  updateAllQueues().catch(err => console.error(err));
-}, 30000);
 
 // Web Server Keep Alive
 http.createServer((req, res) => {
