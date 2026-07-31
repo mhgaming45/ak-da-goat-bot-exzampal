@@ -2,26 +2,29 @@ const {
   SlashCommandBuilder,
   EmbedBuilder,
   ActionRowBuilder,
-  StringSelectMenuBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  StringSelectMenuBuilder
 } = require("discord.js");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("testerpanel")
-    .setDescription("Send Tester Panel"),
+    .setDescription("Send the Tester Panel"),
 
   async execute(interaction) {
 
     const embed = new EmbedBuilder()
-      .setColor("Yellow")
-      .setTitle("🎯 Tester Panel")
+      .setColor("#F1C40F")
+      .setTitle("🎯 Tier Tester Panel")
       .setDescription(
-`Select a gamemode below and press **Next Player**.
-
-━━━━━━━━━━━━━━━━━━━━`
-      );
+        "Select the gamemode you want to test.\n\n" +
+        "After selecting a gamemode, press **Next Player** to take the first player from that queue.\n\n" +
+        "━━━━━━━━━━━━━━━━━━━━"
+      )
+      .setFooter({
+        text: "AK Tier Testing"
+      });
 
     const select = new StringSelectMenuBuilder()
       .setCustomId("select_test_mode")
@@ -74,16 +77,22 @@ module.exports = {
         }
       );
 
-    const row = new ActionRowBuilder().addComponents(select);
+    const selectRow = new ActionRowBuilder()
+      .addComponents(select);
 
-const row2 = new ActionRowBuilder().addComponents(
-  new ButtonBuilder()
-    .setCustomId("next_player")
-    .setLabel("🎯 Next Player")
-    .setStyle(ButtonStyle.Primary)
-);
+    const buttonRow = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId("next_player")
+          .setLabel("Next Player")
+          .setEmoji("🎯")
+          .setStyle(ButtonStyle.Primary)
+      );
 
-await interaction.reply({
-  embeds: [embed],
-  components: [row, row2]
-});
+    await interaction.reply({
+      embeds: [embed],
+      components: [selectRow, buttonRow]
+    });
+
+  }
+};
