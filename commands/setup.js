@@ -30,7 +30,7 @@ module.exports = {
         "🛡️ **Validity**\n" +
         "Provide authentic information about your account and testing details"
       )
-      .setFooter({ text: "Tier Test System" });
+      .setFooter({ text: "Tier System" });
 
     // Row 1: Register Button
     const row1 = new ActionRowBuilder().addComponents(
@@ -63,11 +63,12 @@ module.exports = {
       new ButtonBuilder().setCustomId("diasmp").setLabel("DiaSmp").setEmoji("💎").setStyle(ButtonStyle.Secondary)
     );
 
+    // Send Embed & Buttons directly to channel
     await interaction.channel.send({
       embeds: [embed],
       components: [row1, row2, row3, row4]
     });
 
-    return interaction.reply({ content: "✅ Panel created successfully!", ephemeral: true });
+    return interaction.reply({ content: "✅ Register Panel with all Gamemode Buttons posted!", ephemeral: true });
   }
 };
