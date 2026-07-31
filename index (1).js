@@ -627,7 +627,9 @@ client.on(
         });
       }
 
+            // ====================================
       // TIER MODAL SUBMIT
+      // ====================================
       if (interaction.isModalSubmit() && interaction.customId.startsWith("tier_modal_")) {
         if (!isTester(interaction)) {
           return interaction.editReply({
@@ -661,15 +663,21 @@ client.on(
           return interaction.editReply({ content: "❌ Player is no longer in the server." });
         }
 
+        // Save old rank before updating
+        const rankBefore = data.tier || "None";
+
+        // Remove old tier roles
         if (config.tierRoles) {
           for (const roleId of Object.values(config.tierRoles)) {
             await member.roles.remove(roleId).catch(() => {});
           }
         }
 
+        // Add new tier role
         await member.roles.add(config.tierRoles[rankEarned]).catch(() => {});
         queues[mode] = queues[mode].filter(id => id !== userId);
 
+        // Update database
         data.tier = rankEarned;
         data.wins = (data.wins || 0) + 1;
         db[`user_${userId}`] = data;
@@ -677,6 +685,7 @@ client.on(
 
         await updateQueue(mode);
 
+        // DM Player
         const user = await client.users.fetch(userId).catch(() => null);
         if (user) {
           await user.send({
@@ -691,19 +700,27 @@ client.on(
           }).catch(() => {});
         }
 
+        // LOG CHANNEL EMBED (Image 1 Format)
         if (config.logChannel) {
           const logChannel = client.channels.cache.get(config.logChannel);
           if (logChannel) {
-            await logChannel.send({
-              embeds: [
-                new EmbedBuilder()
-                  .setColor("#2ECC71")
-                  .setTitle("✅ Player Passed")
-                  .setDescription(
-                    `👤 **Player:** <@${userId}>\n🎮 **Gamemode:** ${mode.toUpperCase()}\n🏆 **Tier:** ${rankEarned}\n🧪 **Tester:** <@${interaction.user.id}>`
-                  )
-              ]
-            }).catch(() => {});
+            const logEmbed = new EmbedBuilder()
+              .setColor("#2ECC71")
+              .setTitle(`🏆 ${data.ign || 'Player'}'s Test Results`)
+              .addFields(
+                { name: "Player Name", value: `<@${userId}>`, inline: false },
+                { name: "Tester Name", value: `<@${interaction.user.id}>`, inline: false },
+                { name: "Rank Before", value: `${rankBefore}`, inline: false },
+                { name: "Rank Earned", value: `${rankEarned}`, inline: false },
+                { name: "Game Mode", value: `${mode.toUpperCase()}`, inline: false },
+                { name: "Region", value: `${data.region || 'Not provided'}`, inline: false },
+                { name: "Account", value: `${data.account || 'Not provided'}`, inline: false },
+                { name: "Notes", value: "No notes provided.", inline: false }
+              )
+              .setFooter({ text: "Developer – Yi Chan" })
+              .setTimestamp();
+
+            await logChannel.send({ embeds: [logEmbed] }).catch(() => {});
           }
         }
 
@@ -711,7 +728,8 @@ client.on(
           content: `✅ **${data.ign}** passed!\n\n🏆 Tier Assigned: **${rankEarned}**`
         });
       }
-
+      
+      
       // FAIL MODAL SUBMIT
       if (interaction.isModalSubmit() && interaction.customId.startsWith("fail_modal_")) {
         if (!isTester(interaction)) {
